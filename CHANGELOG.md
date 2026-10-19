@@ -1,5 +1,13 @@
 # Changelog / 更新日志
 
+## [1.13.19-local.22] - 2026-10-20（移除启动期的模组黑名单）
+
+  - 删掉 `checkBlockedMods()` / `BLOCKED_MOD_IDS` / `readBlockedMode()`，以及 jar 内的
+    `craftroute/blockedmode.txt`：模组不再在启动时扫描模组列表，也不再对任何具体模组 id 做拦截或告警。
+  - 构建侧一并简化：去掉 `-PblockedMode=crash|warn` 双变体，产物统一为 `craftroute-<ver>_neoforge_1.21.1.jar`；
+    `buildBoth.bat` 现在只做「版本号 +0.0.1 -> 构建 -> 复制进 mods」。
+  - 之前被列入黑名单的模组现在就是普通共存，不需要额外设置。
+
 ## [1.13.19] - 2026-09-15（多笔订单卡死：样板实例失效 → 计划不可投递）
 
   从 VM-GTL v1.12.58 反向移植（该修复已在 GTL 整合包实测确认消除卡死）。
@@ -392,12 +400,8 @@
 ## [1.8.1] - 2026-08-04
 
 ### 新增
-- **双版本构建**：每次编译同时产出两个 jar
-  - `craftroute-<ver>.jar` —— 针对检测版：检测到不兼容作者的 mod（data_energistics / mekenergistics / soulplied_energistics）时游戏**闪退**
-  - `craftroute-nodetect-<ver>.jar` —— 无针对检测版：检测到只警告，**不闪退**
-  - 构建脚本：`buildBoth.bat`（版本 +0.0.1 → 构建 crash 版 → 构建 warn 版 → 两个 jar 都复制到 mods）
-  - ⚠️ 两个 jar 共用 `modId=craftroute`，启动游戏前**只保留其中一个**，否则 duplicate modId 报错
-- **blockedmod 检测双模式**：运行模式（crash / warn）由 jar 内 `craftroute/blockedmode.txt` 决定，`-PblockedMode=...` 控制
+- **双版本构建**（该机制已于 local.22 移除）：每次编译同时产出两个 jar —— `craftroute-<ver>.jar` 与 `craftroute-nodetect-<ver>.jar`，
+  两个 jar 共用 `modId=craftroute`，只保留其中一个，否则 duplicate modId 报错
 - **版本号基于 1.8.1**：每次编译 `mod_version` +0.0.1
 
 ### 已知限制

@@ -70,7 +70,7 @@ AE2 算一条合成路径，做法是把样板树递归展开一遍。链不深�
 1. Minecraft 1.21.1 + NeoForge 21.1.169+
 2. Applied Energistics 2 19.2.17+（必需）
 3. JEI 19.57+（可选，装了才有右边的配方面板）
-4. 把 `craftroute-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` 放进 `mods/`，旧版本先删掉
+4. 把 `craftroute-1.13.19-local.22-dev_neoforge_1.21.1.jar` 放进 `mods/`，旧版本先删掉
 
 客户端和服务端要用同一个版本，协议是 `route-2`，版本不一致连不上。
 

@@ -3,38 +3,25 @@ setlocal
 cd /d "%~dp0"
 
 REM ============================================================
-REM buildBoth.bat — 每次编译出两个版本：
-REM   1) craftroute-<ver>.jar           针对检测版（blockedMode=crash，检测到该作者 mod 游戏闪退）
-REM   2) craftroute-nodetect-<ver>.jar  无针对检测版（blockedMode=warn，只警告不闪退）
-REM 注意：故意闪退的是【游戏运行时】（throw RuntimeException），
-REM       编译过程本身永不失败。两个 jar 共用 modId=craftroute，
-REM       启动游戏前请删掉不用那个，否则会 duplicate modId 报错。
+REM 版本号 +0.0.1 -> 构建 -> 复制进整合包 mods
+REM 产物只有一个：craftroute-<ver>_neoforge_1.21.1.jar
+REM 目标目录默认 <项目>/../../../mods，可用 -PmodsDir=<路径> 覆盖
 REM ============================================================
 
-echo === [1/3] Bump version +0.0.1 ===
+echo === [1/2] Bump version +0.0.1 ===
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0bump-version.ps1"
 if errorlevel 1 goto :error
 
 echo.
-echo === [2/3] Build CRASH variant (craftroute / 针对检测) ===
-call gradlew.bat -PblockedMode=crash jar copyJarToMods --no-daemon
+echo === [2/2] Build + copy to mods ===
+call gradlew.bat jar copyJarToMods --no-daemon
 if errorlevel 1 goto :error
 
 echo.
-echo === [3/3] Build WARN variant (craftroute-nodetect / 无针对检测) ===
-call gradlew.bat -PblockedMode=warn jar copyJarToMods --no-daemon
-if errorlevel 1 goto :error
-
-echo.
-echo ============================================================
-echo  Build OK — 两个 jar 已复制到 mods 文件夹：
-echo   - craftroute-<version>.jar            （针对检测，会闪退）
-echo   - craftroute-nodetect-<version>.jar   （无针对检测，只警告）
-echo  启动游戏前只保留其中一个！
-echo ============================================================
+echo Build OK.
 goto :eof
 
 :error
 echo.
-echo Build FAILED — 这不是"故意闪退"。故意闪退发生在游戏运行时，不是编译器。
+echo Build FAILED.
 exit /b 1

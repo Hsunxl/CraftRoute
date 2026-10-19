@@ -8,12 +8,8 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.neoforgespi.language.IModInfo;
 import org.slf4j.Logger;
 
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Set;
 
 /**
  * CraftRoute Crafting Accelerator - Main Mod Class
@@ -38,19 +34,6 @@ public class CraftRouteAddon {
     public static final String MOD_ID = "craftroute";
     public static final Logger LOGGER = LogUtils.getLogger();
     
-    /**
-     * Mods by this author (fish1145 / fish_dan — DataEnergistics family) that are NOT
-     * allowed to run together with CraftRouteAddon. When any of these is loaded, CraftRouteAddon
-     * deliberately crashes the game at startup. Remove any of these to continue.
-     * Note: mekenergistics (通用数据 / Mek Energistics) and soulplied_energistics
-     * (Soulplied Energistics, by Buuz135) are no longer blocked — they are compatible.
-     */
-    private static final Set<String> BLOCKED_MOD_IDS = Set.of(
-        "data_energistics"       // DataEnergistics — authors: fish_dan, QiuYe, TedXenon (confirmed)
-    );
-    
-    /** 运行模式: 'crash'(默认) → 检测到该作者 mod 游戏闪退；'warn' → 只警告不闪退。 */
-    private final String blockedMode = readBlockedMode();
     
     public CraftRouteAddon(IEventBus modEventBus) {
         // 注册 COMMON 配置（TOML）：config/craftroute-common.toml，Configured 可游戏内编辑
@@ -65,7 +48,6 @@ public class CraftRouteAddon {
                 (net.neoforged.neoforge.event.server.ServerStoppedEvent e) ->
                         com.craftroute.addon.route.RouteSessions.clear());
         
-        checkBlockedMods(); // crash（或 warn）if a blocked author mod is loaded
         
         // 第三方（Thunderbolt-Core）引擎路由：通过 CraftingPlanningEngines.register(CraftRouteBatchCraftingPlanner, 900, false)
         // 注册到 Thunderbolt 的多引擎体系中。如果 Thunderbolt 未安装则不注册，Mixin 直接接管；
@@ -121,63 +103,7 @@ public class CraftRouteAddon {
         }
     }
     
-    /**
-     * Scans all installed mods; if any belongs to the blocked author, deliberately
-     * crashes the game (闪退). Runs at mod load and again during common setup.
-     */
-    private void checkBlockedMods() {
-        IModInfo found = null;
-        try {
-            ModList modList = ModList.get();
-            if (modList != null) {
-                for (IModInfo info : modList.getMods()) {
-                    String id = info.getModId();
-                    if (id != null && BLOCKED_MOD_IDS.contains(id)) {
-                        found = info;
-                        break;
-                    }
-                }
-            }
-        } catch (Throwable t) {
-            LOGGER.warn("[CraftRoute] Could not scan mod list: {}", t.toString());
-        }
-        if (found != null) {
-            String id = found.getModId();
-            String name = found.getDisplayName();
-            if ("warn".equalsIgnoreCase(blockedMode)) {
-                // 无针对检测版：只警告，不闪退
-                LOGGER.warn("[CraftRoute] 检测到该作者的 mod '{}' ({}) —— 无针对检测版：仅警告，不闪退", id, name);
-                LOGGER.warn("[CraftRoute] Detected blocked author mod '{}' ({}) — warn mode: NOT crashing.", id, name);
-                return;
-            }
-            LOGGER.error("[CraftRoute] 检测到该作者的 mod '{}' ({}) —— 游戏闪退", id, name);
-            LOGGER.error("[CraftRoute] Detected blocked author mod '{}' ({}) — crashing on purpose.", id, name);
-            throw new RuntimeException(
-                "CraftRouteAddon refuses to run with mod '" + id + "' (" + name
-                + ") — mods by this author (fish1145/fish_dan) are incompatible. Remove the mod and restart.");
-        }
-    }
-
-    /**
-     * 从打包进 jar 的 /craftroute/blockedmode.txt 读取运行模式（crash/warn），
-     * 由构建时 -PblockedMode=... 决定，默认 crash。故意闪退的是游戏运行时，不是编译器。
-     */
-    private static String readBlockedMode() {
-        try (InputStream in = CraftRouteAddon.class.getResourceAsStream("/craftroute/blockedmode.txt")) {
-            if (in != null) {
-                String mode = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim();
-                if ("crash".equalsIgnoreCase(mode) || "warn".equalsIgnoreCase(mode)) {
-                    return mode.toLowerCase();
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("[CraftRoute] Could not read blockedmode.txt, defaulting to crash: {}", e.toString());
-        }
-        return "crash";
-    }
-    
     private void commonSetup(final FMLCommonSetupEvent event) {
-        checkBlockedMods(); // re-check once the mod list is fully populated
         if (com.craftroute.addon.config.CraftRouteConfig.isDebugLogging()) {
         CraftRouteAddon.LOGGER.info(
                 "[CraftRoute] Config loaded from config/craftroute-common.toml (proxy.enabled={}) — in-game editing via Configured (if installed)",

@@ -70,7 +70,7 @@ Colours are sampled from the AE2 terminal (panel `#CBCCD4`, workspace `#9A9FB4`,
 1. Minecraft 1.21.1 + NeoForge 21.1.169+
 2. Applied Energistics 2 19.2.17+ (required)
 3. JEI 19.57+ (optional, needed for the recipe panel)
-4. Drop `craftroute-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` into `mods/`, removing older versions first
+4. Drop `craftroute-1.13.19-local.22-dev_neoforge_1.21.1.jar` into `mods/`, removing older versions first
 
 Client and server must run the same version: the packet channel is `route-2`.
 

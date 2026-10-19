@@ -4,20 +4,16 @@ plugins {
 }
 
 group = mod_group_id
-// jar 版本带 loader+MC 后缀：craftroute-<ver>_neoforge_1.21.1.jar / craftroute-nodetect-<ver>_neoforge_1.21.1.jar
+// jar 名带 loader + MC 后缀：craftroute-<ver>_neoforge_1.21.1.jar
 // （与 Forge 1.20.1 兄弟项目 craftroute-<ver>_forge_1.20.1.jar 命名风格一致）
 version = "${mod_version}_neoforge_${minecraft_version}"
 
-// blockedMode: 'crash'(默认) → 检测到该作者 mod 游戏闪退；'warn' → 只警告不闪退
-// 每次编译出两个版本：craftroute-<ver>.jar（crash / 针对检测）+ craftroute-nodetect-<ver>.jar（warn / 无针对检测）
-def blockedMode = providers.gradleProperty('blockedMode').getOrElse('crash')
 
 // 整合包实例的 mods 目录：默认 <项目>/../../../mods，可用 -PmodsDir=<绝对路径> 覆盖（CI / 另放的构建目录）。
 def instanceMods = providers.gradleProperty('modsDir').getOrElse('../../../mods')
-def modArchiveName = blockedMode == 'warn' ? 'craftroute-nodetect' : mod_id
 
 base {
-    archivesName = modArchiveName
+    archivesName = mod_id
 }
 
 java {
@@ -115,16 +111,11 @@ tasks.named('processResources', ProcessResources) {
             ae2_version_range      : ae2_version_range
     ]
     inputs.properties replaceProperties
-    inputs.property('blockedMode', blockedMode)
 
     filesMatching('META-INF/neoforge.mods.toml') {
         expand replaceProperties
     }
 
-    // 把 blockedMode(crash/warn) 展开进 craftroute/blockedmode.txt，打包进 jar，运行时可读
-    filesMatching('craftroute/blockedmode.txt') {
-        expand([blockedMode: blockedMode])
-    }
 }
 
 tasks.named('compileJava', JavaCompile) {
@@ -133,14 +124,11 @@ tasks.named('compileJava', JavaCompile) {
     ]
 }
 
-// Auto-copy compiled JAR to Minecraft mods folder after build
-// Remove all old versions of this mod before copying the new one
-// 只删当前变体的旧 jar，保留另一个变体（crash 变体不会误删 nodetect 变体）
-// 属性在 doLast 外捕获成局部变量（doLast 里拿不到配置期的 mod_version/modArchiveName 值）
+// 把编好的 jar 复制进整合包的 mods 目录（显式任务，不挂 build）
+// 复制前先删掉本模组的旧版本 jar；属性在 doLast 外捕获成局部变量
 tasks.register('cleanOldJars') {
     def modsDir = java.nio.file.Path.of(instanceMods)
-    // crash 变体(craftroute) → craftroute-<数字>.jar；warn 变体(craftroute-nodetect) → craftroute-nodetect-*.jar
-    def glob = modArchiveName == 'craftroute' ? 'craftroute-[0-9]*.jar' : "${modArchiveName}-*.jar"
+    def glob = "${mod_id}-*.jar"
     doLast {
         java.nio.file.Files.newDirectoryStream(modsDir, glob).withCloseable { stream ->
             stream.each { java.nio.file.Files.deleteIfExists(it) }

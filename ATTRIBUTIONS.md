@@ -6,7 +6,7 @@
 > 本文件逐条列出**引用了谁、怎么引用、对方是什么授权、有没有随包分发**。
 >
 > 本模组自身以 **LGPL-3.0** 发布，全文见 [LICENSE](LICENSE)。
-> 更新日期：2026-10-20 · 对应版本：`1.13.19-local.21-dev`
+> 更新日期：2026-10-20 · 对应版本：`1.13.19-local.22-dev`
 
 ---
 
@@ -51,7 +51,7 @@
 | **Neo ECO AE Extension** (`neoecoae`) | DancingSnow, ZhuRuoLing, Yang120231 | **GPLv3** | 仅作**运行时**可选的样板来源 / 能力探测，**不与本项目代码链接或派生** |
 | **AppliedFlux** (`appflux`) | 见其仓库 | 见其仓库 | 能量（FE）作为合成材料 / 产物时的模糊族匹配 |
 | **ME Requester** (`merequester`) | Almost Reliable | LGPL-3.0 | 请求来源识别 |
-| **Soulplied Energistics** (`soulplied_energistics`) | Buuz135 | **MIT** | 已确认兼容（早期版本会被启动检测拦下，现不再拦截） |
+| **Soulplied Energistics** (`soulplied_energistics`) | Buuz135 | **MIT** | 已确认兼容，无需额外设置 |
 | **ME 综合工作终端 / WCWT** (`wcwt`) | lhy | **MIT** | `RouteClient.separateTerminalButtons`：把「深色模式」按钮上移 22px，避开 JEI 书签按钮 |
 | **FTB Library** (`ftblibrary`) | FTB Team | All Rights Reserved | **不注入、不修改**；本项目刻意使用普通 `Screen` 而非 `AbstractContainerScreen`，以**规避** FTB 自动注入的按钮 |
 | **Dark Mode Everywhere** (`darkmodeeverywhere`) | Buuz135 | **MIT** | **不注入、不修改**；自绘 `AeButton` 只重写 `renderWidget`，避免被其染黑 |
