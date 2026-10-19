@@ -7,7 +7,7 @@ modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
 logoFile="ae2vm.png"
-authors="Tao  QQ 2584300846"
+authors="Tao"
 description='''
 Replaces AE2 recursive crafting calculation with a stack-based virtual machine for massive performance gains.
 
@@ -23,6 +23,14 @@ Architecture:
 
 [[mixins]]
 config="${mod_id}.mixins.json"
+
+# Optional client recipe import uses the per-recipe button API present in the tested JEI build.
+[[dependencies.${mod_id}]]
+    modId="jei"
+    type="optional"
+    versionRange="[19.57.0,)"
+    ordering="AFTER"
+    side="CLIENT"
 
 [[dependencies.${mod_id}]]
     modId="neoforge"

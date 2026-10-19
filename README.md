@@ -1,273 +1,119 @@
-# AE2 VM — AE2 合成虚拟机
+# AE2 VM
 
-![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-blue?logo=minecraft)
-![NeoForge](https://img.shields.io/badge/NeoForge-21.1.169+-orange)
-![AE2](https://img.shields.io/badge/AE2-19.2.17+-green)
-![Java](https://img.shields.io/badge/Java-21-red)
-![Version](https://img.shields.io/badge/Version-1.13.12-brightgreen)
-![License](https://img.shields.io/badge/License-LGPL%20v3-blue)
+AE2 自动算合成路径的时候，偶尔会算错。这个模组就干两件事：
 
-> **English version**: [README_en.md](README_en.md)
-> **Author**: Tao &nbsp;|&nbsp; **QQ**: 2584300846 &nbsp;|&nbsp; **GitHub**: [AE2-VM](https://github.com/TaoLe-si/AE2-VM)
+1. 把它那套递归计算换成顺序执行的虚拟机，算得快一点、深一点的合成链也算得动，缺料清单更靠谱；
+2. 加一个合成树画布，路径直接画出来，你觉得它选错了，可以自己指定每个节点用哪个配方、往哪一层展开，最后编码成样板丢给供应器。
 
-**AE2 VM** 是 [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) 的 NeoForge 扩展模组。它将 AE2 原本的**递归合成树遍历**替换为**栈式虚拟机（Stack-based VM）执行编译后的字节码**，实现合成计算的极限加速。适用于深度嵌套的大型合成配方（如 AE2 扩展包中的无限存储元件）。
+英文说明：[README_en.md](README_en.md) · 第三方声明：[ATTRIBUTIONS.md](ATTRIBUTIONS.md)
 
 ---
 
-## 性能
+## 为什么要做这个
 
-| 场景 | 原版 AE2 | AE2 VM | 加速比 |
-|------|----------|--------|--------|
-| 1× quantum_omni_cell_16k | ~90s | ~38ms | **~2,400×** |
-| 10^3× quantum_omni_cell_64m | — | ~17ms | — |
-| 10^6× quantum_omni_cell_64m | N/A | ~10ms | — |
-| 10^6× 递归样板 (1A→1A) | 无法计算 | ~秒算 | — |
-| 10^9× creative_ae_cell_long | N/A | ~280ms | — |
+AE2 算一条合成路径，做法是把样板树递归展开一遍。链不深、量不大的时候没问题，一旦碰上大型整合包里那种几十层的配方，就会遇到这几类毛病：
 
-> 原版 AE2 使用递归遍历，合成树深度每增加一层，耗时指数增长。VM 将遍历转为顺序字节码执行 + JIT 缓存，达到亚秒级计算。
-> 「—」表示原版 AE2 无基线（无法计算 / 未测量），无法给出加速比。
+- **数量不对**。网络里明明有料，它报「缺少 XX ×99」；或者反过来，计划显示能做，下了单 CPU 进度一直是 0，取消重下又好了。
+- **深链算不动**。层数一多，耗时从几百毫秒跳到几十秒，量再大一点（十万、百万级）直接算不完，服务端主线程卡住。
+- **循环配方绕不出来**。`A + B → 2A` 这种自增配方、`9B → A / 1A → 9B` 这种纯换算环，容易被判成死循环，或者算出一个其实拿不出货的结果。
+- **看不见它选了哪条路**。算完只有一个数字，你想换个配方、想看看这个中间产物还能怎么造，没有地方可以点。
+
+前三条是计算本身的问题，第四条是能不能看、能不能改的问题。这个模组两条都做了。
 
 ---
 
-## 能力与修复（v1.13.12）
+## 一、计算：把递归换成虚拟机
 
-- **环感知样板选择（v1.13.12，对标 VM-GTL v1.12.x CYCLE-AWARE）**：wouldCauseCycle
-  （含 stock-aware 变体）在 resolve() Try-1 阶段剪除会闭合死环（配方定义图 SCC：无库存种子 +
-  无外部供应者）的候选样板，如 steel_ingot↔steel_dust；computeCycleBoundKeys（含候选边注入）
-  用迭代 Tarjan SCC 跳过已播种 / 外部供应的环，全部候选环倾向时回退原集合。
-- **种子环运行时裁剪（v1.13.12，对标 VM-GTL v1.14.x JIT-GRAPH / SEEDED-RING）**：
-  CallFrame.cycleCut / withCycleCut()（cut 帧 RETURN 的 claim EXTRACT 记真实库存消耗、
-  INSERT_OUTPUT 不再伪造产物）、capturingBundle() / captureAction()（捕捉期环探测只走
-  SIMULATE）、circularCache 分支（环上并行兄弟照常消耗库存，仅超库存短差记 missing）、
-  环分支 ringSeeded（有种子 → 环保留成员样板；死环 → 从父帧 subCalls 拉真实库存并记短差，
-  杜绝 transfinite CPU 零进度卡死）。
-- **纯转换环可行性守卫（v1.13.12，对标 VM-GTL v1.15.x GTL 1:1）**：RingResult +
-  computeConversionRingMissingEx——价值充分环把环成员记入 feasible，聚合阶段剥除捕捉期
-  残留 missing；价值不足环仍在最小价值被需求键上报赤字。
-- **温热快路径自供给环守卫（v1.13.12，对标 VM-GTL v1.15.x PERF）**：used 键可制造但缓存
-  计划自生产足量该键（byproduct 回环，如 2B→1D+2A）时，跳过“可制造→库存敏感”拒绝；库存
-  守卫仍以 O(1) 方式逐键复核（自供给量 = Σ patternTimes × 样板输出，独立于计划的
-  emittedItems 快照）。warmBillionSeededRing 1e9 种子环温热中位数 100–200ns 端到端
-  （<1000ns 断言），tryCachedPlan 平均 87–160ns；全部 1e9 温热场景中位数 100–200ns。
-- **递归 / 自引用配方（v1.10.3）**：`A+B→2A` 放大器与 `A+B→A+C` 精华催化剂——自产出抵消自消耗，自键收敛为一次性种子，主输出按净增修正合次数；种子缺失时恰报缺 1 种子。
-- **换算环守恒（v1.10.3）**：无副产物纯换算环（`9B→A, 1A→9B, …`）价值守恒——BigInteger 分数精确求环值，不足时恰报最小价值键缺失（消除"无种子报可行"假阳）。
-- **催化剂反馈环 working-capital（v1.10.2）**：副产物闭环的可行种子（working capital）精确计算。
-- **耐久工具（v1.10.2）**：有限次使用工具（`amount × ceil(times/uses)` 闭式）。
-- **处理配方默认模糊（v1.10.2）**：处理配方输入按同物品完整模糊族（任意 NBT）匹配网络库存（GTL 温室 / MA 精华）。
-- **可复用库存种子模糊（v1.10.3）**：宿主私有可复用库存路由（`returnedFrom`）按模糊族匹配变体库存。
-- **模糊替换只作用于替换槽（v1.10.5）**：物品/流体替换组只满足**开启了替换的槽位**；精确槽（单变体）强制由主变体库存或合成主变体满足，精确槽叶子缺失时正确报缺失。修复了 2026-08-09 视频中"计划看似完成、CPU 执行却卡死（进度 0 / ETA 暴涨）"的假可行 bug。
-- **斐波那契指数链（v1.9.8+）**：O(patterns+edges) 需求传播聚合替代逐路径展开，24 层 10⁹ 请求秒算。
-- **模糊组库存聚合（v1.9.13）**：聚合期求和整组库存，替换变体库存满足槽位时不再假缺失。
+装上就生效，不需要配置。AE2 发起的合成计算会被接管：样板在**编码的时候**就编译成一段字节码，请求进来直接顺序执行，不再递归。子样板运行时按需解析，算过的子树会缓存起来；数量用 BigInteger，中间值不会溢出。
+
+判断标准只有一条：**结果要和原版对得上**。能算出来的必须一致，算不出来时报的缺失清单也要对得上，否则就退回原版算法。
+
+想关掉：`config/ae2vm-common.toml` 里 `proxyEnabled = false`。装了 Configured 可以在游戏内改（改完要重启）。
+
+性能参考：十条左右层深的深链，冷算一般在几十毫秒量级；同样的请求重复算（温热命中）在中位数 100–200ns。这些数字来自仓库里的基准测试，不是估算。
 
 ---
 
-## 测试与基准（版本 1.13.12）
+## 二、画布：手动搭合成树
 
-> 以下数据来自 `gradlew.bat cleanTest test --no-daemon --no-configuration-cache`（BUILD SUCCESSFUL），未编造。
+在任意 AE2 终端界面按 `F8`，或者点终端工具栏里的「合成树画布」按钮。
 
-```
-测试类: 33    用例: 242    失败: 0    错误: 0    跳过: 0
-构建: BUILD SUCCESSFUL
-闪电基准: cases=39 supported=38 falsePositive=1 engineError=0 timeout=0
-边界基准: cases=37 ok=37 feasible=36
-温热基准: PerformanceBenchmark 8 例，全部请求量 1e9，真实端到端逐次计时（不摊销）：
-  温热中位数 100–200ns（<1000ns 断言），ring 平均 156ns、tryCachedPlan 平均 87–160ns
-环基准: CycleAwarePatternSelectionBenchmark 6 例 + ComplexCycleChainBenchmark 15 例 + GtlFullCoverageBenchmark 14 例
-```
+如果你是从**合成确认页**打开的，它会直接把你正在算的那棵树读进来（最终产物 + 数量），进去就是「修改」模式；从普通终端打开则是「新建」，从空白开始。
 
-### 闪电基准（Thunderbolt-Core 参考能力，39 例）
+**画布怎么用**
 
-13 图族 × 3 材料模式（MISSING / MINIMUM / UNBOUNDED），13 图族全部 SUPPORTED：
+- 点一个节点，右边显示这个产物的配方（就是 JEI 的配方界面，不是自己另画一套）。
+- 选一个配方，它下面的材料就长出来成为子节点，每个材料又可以是下一层的产物，一直展开到原料或者转回来自己。
+- 节点可以拖，画布可以平移，`Ctrl+滚轮` 缩放，`Home` 一键适配，`Ctrl+Z` 撤销，`Delete` 删掉选中的节点。
+- 节点上右键或者点 `+` 出配方菜单：换配方、只清掉这一枝的下级、把这个节点连它下面一起移除。根节点也能删，删完回到「没有目标」的状态，后悔了可以撤销。
 
-| 图族 | 状态 |
-|---|---|
-| 单配方 DAG（dispersed / fibonacci） | ✅ SUPPORTED |
-| 多配方 DAG（greedy-trap / fibonacci） | ✅ SUPPORTED（fibonacci/minimum 为唯一 FALSE_POSITIVE） |
-| 环裁切（conversion-ring / self-growth-cut） | ✅ SUPPORTED |
-| 催化剂 / 反馈环（returned-seed / raw / lossy） | ✅ 9/9 SUPPORTED |
-| 耐久链（finite-use-chain） | ✅ 3/3 SUPPORTED |
-| 模糊 / 可复用库存（variant-route） | ✅ 3/3 SUPPORTED |
-| 递归 / 自引用（amplifier / essence-catalyst） | ✅ 6/6 SUPPORTED |
+**找东西**
 
-> 唯一剩余 FALSE_POSITIVE：`multi-dag/fibonacci/minimum`（多样板最优选择），需全局优化器（BoundedCombinations / 线性求解器），非引擎错误。
+顶部搜索框按中文名或者物品 ID 搜，一次 6 条，滚轮或箭头翻页。搜到的东西可以直接拖到节点上接上去。
 
-### 边界能力基准（37 例）
+**编码样板**
 
-`craftable-primary-white-stock amt=100 (white=1)` 修复前 `missing={white_wool=99}` → 修复后 `missing={}`；
-全部 37 例与期望可行性一致（36 可行 + 1 不可行 sanity）。
+- 编码会消耗网络里 1 张空白样板；做出来的样板先进你的样板缓存（18 格，存在玩家 NBT 里，死了也不会丢）。
+- 「放入背包」只搬放得下的，背包满了不会掉东西。
+- 「上传到供应器」会列出同一个网络、同一个维度里能用的样板供应器，显示已用 / 总格数。拖过去之后服务端会重新校验一遍（菜单、网络、供应器、槽位、token 都要对上），过期的拖放、想覆盖已有样板的操作会被拒掉。
+
+**外观**
+
+颜色是从 AE2 终端上取的（面板 `#CBCCD4`、工作区 `#9A9FB4`、槽位边框 `#696D88`），按钮是自绘的，只重写了画的部分、点击还是走原版 `Button`，这样 Dark Mode Everywhere 那种全局染色不会把按钮涂黑。
+
+> 一个实用提醒：这个界面是普通 `Screen`，不是容器屏。改成容器屏的话 JEI 就不会在右边画物品栏，FTB 和 Dark Mode 也会往里塞按钮。
 
 ---
 
-## 工作原理
+## 安装
 
-```mermaid
-flowchart TD
-    A[AE2 合成请求] --> B[CraftingServiceMixin]
-    B --> C{顶层为纯 AE2 样板?}
-    C -->|否| D[交给 AE2 原生处理]
-    C -->|是| E[PatternCompiler 编译为字节码]
-    E --> F[CraftingVM 栈式执行]
-    F --> G[JIT Bundle 缓存]
-    G --> H[生成 CraftingPlan]
-    H --> I[返回 AE2 合成系统]
+1. Minecraft 1.21.1 + NeoForge 21.1.169+
+2. Applied Energistics 2 19.2.17+（必需）
+3. JEI 19.57+（可选，装了才有右边的配方面板）
+4. 把 `ae2vm-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` 放进 `mods/`，旧版本先删掉
+
+客户端和服务端要用同一个版本，协议是 `route-2`，版本不一致连不上。
+
+---
+
+## 从源码构建
+
+需要 JDK 21。脚本里的依赖路径默认指向整合包实例的 `mods` 目录（`../mods` 相对项目根目录），不在整合包里构建的话用 Gradle 属性覆盖：
+
+```bat
+gradlew.bat -PjeiJar=<jei.jar> -Pae2ctJar=<ae2ct.jar> -PthunderboltJar=<thunderbolt.jar> jar
 ```
 
-- **样板编译**：编码时把所有 AE2 样板预编译为独立字节码（`DUP → RECORD_PATTERN → EXTRACT → CALL_BY_KEY → … → INSERT_OUTPUT → RETURN`），子样板运行时懒解析，全局缓存。
-- **栈式虚拟机**：BigInteger 栈无限精度；顺序执行无递归；0–1023 常用值预分配；2 的幂次走位运算快路径。
-- **JIT Bundle 缓存**：cts=1 记忆化（子树 Δ 直接复用）、cts>1 `scale(cts)` 一次放大（O(1) 批量回放）、跨请求静态缓存。
-- **无限精度**：中间值永不溢出，输出转 AE2 long API 时 cap 到 `Long.MAX_VALUE`。
+产物在 `build/libs/`。往实例里复制是单独的任务，不会跟着 `build` 自动跑：
 
-## 字节码指令集
-
-| Opcode | 值 | 说明 |
-|--------|-----|------|
-| `PUSH_ITEM` | 0x00 | 压入物品数量 × 倍数 |
-| `PUSH_LONG` | 0x01 | 压入 64 位整数 |
-| `ADD` | 0x02 | 加法（溢出检测 → BigInteger） |
-| `SUB` | 0x03 | 减法（溢出检测 → BigInteger） |
-| `MUL` | 0x04 | 乘法（2 的幂次快速路径） |
-| `DIV_ROUNDUP` | 0x05 | 向上取整除法 |
-| `EXTRACT_INGREDIENT` | 0x06 | 从模拟网络提取原料 |
-| `RECORD_OUTPUT` | 0x07 | 记录产出 |
-| `RECORD_INGREDIENT` | 0x08 | 记录原料（旧） |
-| `RECORD_MISSING` | 0x09 | 记录缺失物品 |
-| `DUP` | 0x0A | 复制栈顶 |
-| `POP` | 0x0B | 弹出栈顶 |
-| `SWAP` | 0x0C | 交换栈顶两个值 |
-| `RECORD_PATTERN` | 0x0D | 记录样板执行（用于 AE2 作业调度） |
-| `CALL` | 0x0E | 调用编译好的样板字节码 |
-| `RETURN` | 0x0F | 返回调用者 |
-| `CALL_BY_KEY` | 0x10 | 按物品 Key 懒解析子样板 |
-| `INSERT_OUTPUT` | 0x11 | 将产物插入模拟网络 |
-| `CATALYST_SEED` | 0x12 | 记录一次性催化剂/容器种子需求 |
-| `DURABILITY_TOOL` | 0x13 | 记录有限次使用工具需求 |
-| `FUZZY_SLOT` | 0x14 | 标记下一个 CALL_BY_KEY 为替换槽（替换变体可满足） |
-| `HALT` | 0xFF | 停止执行，生成计划 |
-
----
-
-## 使用方法
-
-### 安装
-
-1. 安装 [NeoForge](https://neoforged.net/) 与 [Applied Energistics 2 19.2.17+](https://www.curseforge.com/minecraft/mc-mods/applied-energistics-2)
-2. 将 `ae2vm-1.13.12.jar` 放入 `mods/` 文件夹（请删除旧版本 jar，仅保留最新版）
-   - 无针对检测版请使用 `ae2vm-nodetect-1.13.12.jar`（检测到不兼容作者 mod 时只警告、不闪退）
-   - 两个变体 jar 共用 `modId=ae2vm`，**只能保留其中一个**，否则会 duplicate modId 报错
-3. 启动游戏，日志出现 AE2 VM 横幅即加载成功
-
-### 在游戏中使用
-
-无需任何额外设置，AE2 VM 自动接管纯 AE2 样板的合成计算：
-
-1. 正常编码 AE2 样板（放置到样板供应器即可，编码时自动编译为字节码）
-2. 在 ME 终端发起合成请求
-3. VM 自动加速计算（透明替换原版算法）
-
-**配置开关**：编辑 `config/ae2vm-common.toml` 的 `proxyEnabled=false` 可完全禁用 VM 代理，交给 AE2 原生计算。安装了 Configured（NeoForge 版）可在游戏内「Mod Configuration」界面直接编辑（修改后需重启游戏生效）。
-
-**支持的配方**：普通合成样板（分子装配室）、处理样板、深层嵌套大型配方（如 AE2 扩展包的无限存储元件）。
-
-**注意事项**：ECO / 第三方模组样板自动透传给原生处理；合成计算在后台线程执行，不卡顿服务器主线程。
-
----
-
-## 第三方模组集成（开发）
-
-第三方模组可通过公开 API 调用 AE2 VM 计算引擎（可选依赖，`compileOnly`）：
-
-```java
-import com.ae2vm.addon.api.AE2VMCrafting;
-import com.ae2vm.addon.api.AE2VMCraftingRegistry;
-
-// 在第三方模组的 @Mod 构造函数中注册（marker = 类名包含的子串）
-AE2VMCraftingRegistry.register("mymod");
-
-// 可选集成：仅当 AE2 VM 已加载时使用，否则回退原生
-if (AE2VMCrafting.isLoaded()) {
-    CompletableFuture<ICraftingPlan> plan = AE2VMCrafting.calculate(
-        grid, requester, what, amount, strategy);
-    plan.thenAccept(p -> submitToCpu(p, requester));
-} else {
-    nativeCalculate(requester, what, amount, strategy);
-}
-```
-
-- **注册**（`register`）决定 mixin 是否接管本模组发起的请求；**计算**（`calculate`）是本模组主动调用 VM。
-- AE2 自身（`appeng.*`）总是由 VM 计算；未注册第三方模组走自身合成逻辑。
-- 依赖声明 `compileOnly`，未安装 AE2 VM 时 `isLoaded()` 返回 `false`，模组照常工作。
-- `calculate()` 异步在后台线程执行；`calculateSync()` 阻塞调用线程，仅非服务器主线程使用。
-
----
-
-## 项目结构
-
-```
-src/main/java/com/ae2vm/addon/
-├── AE2VMAddon.java                  # Mod 入口（blockedmod 检测 / 加载横幅）
-├── api/
-│   ├── AE2VMCrafting.java           # 公开 API（第三方模组调用 VM）
-│   └── AE2VMCraftingRegistry.java   # 第三方模组注册表
-├── compiler/
-│   ├── PatternCompiler.java         # 样板 → 字节码编译器
-│   └── IFiniteUseInput.java         # 有限次使用工具能力接口
-├── config/
-│   ├── AE2VMConfig.java             # 配置入口（proxy.enabled 开关）
-│   ├── AE2VMConfigData.java         # 配置数据
-│   └── AE2VMConfigImpl.java         # Cloth Config 实现
-├── mixin/
-│   ├── CraftingServiceMixin.java    # 合成计算拦截 + 按网络编译样板
-│   ├── PatternProviderLogicMixin.java # 样板预编译
-│   └── CraftingSimulationStateAccessor.java # 访问器
-├── vm/
-│   ├── CraftingVM.java              # 栈式虚拟机 + JIT
-│   ├── CraftingBytecode.java        # 字节码容器
-│   ├── Opcode.java                  # 指令枚举
-│   └── RealtimeNetworkCraftingSimulationState.java # 实时网络库存快照
-└── resources/
-    ├── ae2vm.png                    # 模组图标
-    ├── ae2vm.mixins.json            # Mixin 配置
-    └── META-INF/neoforge.mods.toml  # Mod 元数据
+```bat
+gradlew.bat -PmodsDir=<实例的 mods 目录> copyJarToMods
 ```
 
 ---
 
-## 模组信息
+## 已知限制
 
-| 项目 | 值 |
-|------|-----|
-| Mod ID | `ae2vm` |
-| 名称 | AE2 VM |
-| 版本 | 1.10.7 |
-| 作者 | Tao (QQ: 2584300846) |
-| 包名 | `com.ae2vm.addon` |
+写在这里，免得回头当成 bug 重复排查：
 
-### 依赖
-
-| 依赖 | 版本 |
-|------|------|
-| Minecraft | 1.21.1 |
-| NeoForge | ≥ 21.1.169 |
-| Applied Energistics 2 | ≥ 19.2.17 |
-| Configured（可选，游戏内配置界面） | 2.x |
+- **画布工程不保存**。关掉画布，你搭的树就没了。样板缓存是持久的，树不是。
+- **求解器没重写**。服务端下料还是按「同一种材料统一处理」，画布按节点单独选配方，不代表 CPU 能同时接受同一个物品走两条不同的路。
+- **自动导入只取第一个配方**。AE2CT 同步过来的快照按产物匹配，同一产物有多个配方时只认第一个。
+- **供应器上传范围有限**。只支持 `PatternContainer` + `InternalInventory` 的供应器；不支持把已有样板拖回缓存、交换、覆盖。
+- **复杂配方只是显示对**。JEI 画得出来不等于样板语义对，概率产物、非消耗催化剂、机器配置、能量这些还要逐类适配。
+- **上限**：画布 80 个节点、24 层；搜索 256 条、一页 6 条。
+- **深色模式按钮避让只针对 WCWT 终端**。换了别的终端模组要重新确认。
 
 ---
 
-## 构建
+## 第三方模组
 
-```bash
-set JAVA_HOME=C:\Users\...\corretto-22.0.2
+这个模组能跑起来，靠的全是别人的东西：AE2 的 API、JEI 的配方绘制、AE2CT 的合成树数据，还有一堆整合包模组的兼容配合。
 
-# 双版本构建（推荐）：版本 +0.0.1 → 构建 crash 版 → 构建 warn 版 → 两个 jar 都复制到 mods
-buildBoth.bat
+**谁被引用了、什么授权、有没有打进包里，全部写在 [ATTRIBUTIONS.md](ATTRIBUTIONS.md)**，包括每一个 Mixin 注入的目标类。这里只说结论：仓库和 JAR 里不含任何第三方模组的代码或资源，所有依赖都是 `compileOnly`，由玩家自己装。
 
-# 或单次构建
-.\gradlew.bat -PblockedMode=crash jar copyJarToMods --no-daemon   # 针对检测版
-.\gradlew.bat -PblockedMode=warn   jar copyJarToMods --no-daemon   # 无针对检测版
+其中 AE2:Crafting Tree（AE2CT）的授权是保留所有权利，本项目只是读它已经同步到客户端的数据，另加一个只改按钮位置的兼容 Mixin，没有复制它的代码。作者如果不同意，说一声就删。
 
-# 输出（<ver> = 当前版本，如 1.10.7）
-# build/libs/ae2vm-<ver>.jar            （针对检测版，检测到不兼容 mod 游戏闪退）
-# build/libs/ae2vm-nodetect-<ver>.jar   （无针对检测版，只警告不闪退）
-```
+## 许可
 
-> 每次编译 `mod_version` 自动 +0.0.1（基于 1.9.0）。`copyJarToMods` 会先删除旧版本 jar 再复制。
+本项目以 LGPL-3.0 发布，见 [LICENSE](LICENSE)。第三方作品的权利仍归各自作者。

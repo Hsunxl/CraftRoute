@@ -9,6 +9,6 @@ package com.ae2vm.addon.compat.thunderbolt;
 // at static init, which crashes the game. Stubbing the package fixes that.
 //
 // To re-enable: restore the v1.13.15 sources from git, restore the
-// `compileOnly files('E:/TB Thirdparty/Thunderbolt-Core/build/libs/thunderbolt-2.0-alpha.jar')`
+// `compileOnly files(...thunderbolt.jar)` line (see -PthunderboltJar in build.gradle)
 // line in build.gradle, and uncomment the `ThunderboltCompat.registerIfPresent();`
 // call in AE2VMAddon.java.

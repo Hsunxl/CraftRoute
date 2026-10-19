@@ -48,20 +48,18 @@ neoForge {
 }
 
 dependencies {
+    compileOnly files('../../../mods/ae2jeiintegration-1.2.1.jar')
+    // Optional client integrations; supplied by the installed ATM10 instance.
+    compileOnly files(providers.gradleProperty('jeiJar').getOrElse('../../../mods/jei-1.21.1-neoforge-19.57.0.446.jar'))
+    compileOnly files(providers.gradleProperty('ae2ctJar').getOrElse('../../../mods/ae2ct-1.21.1-1.1.1.jar'))
+    testRuntimeOnly files(providers.gradleProperty('jeiJar').getOrElse('../../../mods/jei-1.21.1-neoforge-19.57.0.446.jar'))
+    testRuntimeOnly files(providers.gradleProperty('ae2ctJar').getOrElse('../../../mods/ae2ct-1.21.1-1.1.1.jar'))
     implementation "org.appliedenergistics:appliedenergistics2:${ae2_version}"
     compileOnly "io.github.llamalad7:mixinextras-neoforge:0.5.3"
-    // Thunderbolt-Core（弱依赖 / 可选前置，compileOnly）：未安装也能正常运行。
-    // 装了且通过 /thunderbolt engine ae2vm 选中本引擎时，才把 AE2 合成计算路由到 VM；
-    // 未选中则不走 VM（交给 Thunderbolt/原版）。neoforge.mods.toml 不声明硬依赖。
-    // Thunderbolt-Core 弱依赖 (compileOnly, optional)：API 接口来自 jar (com.moakiee.thunderbolt.api.crafting.*)。
-    // 下面 37 个 source 文件位于 src/main/java/com/moakiee/thunderbolt/core/crafting/ —— 是 AE2VMAddon 的
-    // "VM 测试套件" reference framework（VM 自身测试如 Ae2VmReferenceCapabilitySuiteTest 引用这些类），
-    // 编译时 Gradle source class 优先于 jar（同名时 main 编译产物覆盖 jar 中的 class），
-    // 故不需要 exclude —— 2.0-alpha jar 提供接口，main source 提供 core.crafting.* 实现。
-    // (v1.13.16+) Thunderbolt-Core algorithm library was stubbed out.
-    // Re-enable: git restore ThunderboltCompat + AE2VMBatchCraftingPlanner from v1.13.15,
-    // uncomment registerIfPresent() in AE2VMAddon.java, then uncomment:
-    compileOnly files('E:/TB ThirdParty/Thunderbolt-Core/build/libs/thunderbolt-2.0-alpha.jar')
+    // Thunderbolt-Core：可选前置，compileOnly。未安装也能正常运行；装了之后
+    // 只有玩家用 /thunderbolt engine ae2vm 选中本引擎，合成计算才会路由到 VM。
+    // 路径默认取整合包 mods 目录，可用 -PthunderboltJar=<jar> 覆盖（CI / 开发机）。
+    compileOnly files(providers.gradleProperty('thunderboltJar').getOrElse('../../../mods/thunderbolt-2.0.1.jar'))
 
     testImplementation 'org.spongepowered:mixin:0.8.5'
     testImplementation platform('org.junit:junit-bom:5.10.2')
@@ -89,6 +87,17 @@ tasks.named('test', Test) {
     testLogging {
         showStandardStreams = true
     }
+}
+
+// Correctness regression suite, explicitly separate from the upstream sub-microsecond timing assertions.
+// The ordinary `test` task above is unchanged and still includes all benchmarks.
+tasks.register('routeFunctionalTest', Test) {
+    dependsOn tasks.named('testClasses')
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    jvmArgs '-Xverify:all'
+    exclude '**/PerformanceBenchmark.class'
 }
 
 tasks.named('processResources', ProcessResources) {
@@ -124,8 +133,11 @@ tasks.named('compileJava', JavaCompile) {
 // Remove all old versions of this mod before copying the new one
 // 只删当前变体的旧 jar，保留另一个变体（crash 变体不会误删 nodetect 变体）
 // 属性在 doLast 外捕获成局部变量（doLast 里拿不到配置期的 mod_version/modArchiveName 值）
+// 目标目录：默认 <项目>/../../../mods（整合包实例的 mods），可用 -PmodsDir=<绝对路径> 覆盖。
+def modsDirPath = providers.gradleProperty('modsDir').getOrElse('../../../mods')
+
 tasks.register('cleanOldJars') {
-    def modsDir = java.nio.file.Path.of('E:/MC/.minecraft/versions/NAST hard d0.9.1 beta3/mods')
+    def modsDir = java.nio.file.Path.of(modsDirPath.get().toString())
     // crash 变体(ae2vm) → ae2vm-<数字>.jar；warn 变体(ae2vm-nodetect) → ae2vm-nodetect-*.jar
     def glob = modArchiveName == 'ae2vm' ? 'ae2vm-[0-9]*.jar' : "${modArchiveName}-*.jar"
     doLast {
@@ -139,13 +151,11 @@ tasks.register('copyJarToMods', Copy) {
     dependsOn tasks.named('jar')
     dependsOn 'cleanOldJars'
     from tasks.named('jar').flatMap { it.archiveFile }
-    into 'E:/MC/.minecraft/versions/NAST hard d0.9.1 beta3/mods'
+    into modsDirPath.get()
     doLast {
         logger.lifecycle("Copied JAR to mods folder")
     }
 }
 
-// Hook into the build lifecycle: build → copyJarToMods
-tasks.named('build') {
-    finalizedBy 'copyJarToMods'
-}
+// 不把 copyJarToMods 挂在 build 上：往玩家实例的 mods 目录写文件应当是显式动作。
+// 需要时手动执行 gradlew copyJarToMods，或用 buildBoth.bat。

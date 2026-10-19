@@ -57,6 +57,13 @@ public class AE2VMAddon {
         ModList.get().getModContainerById(MOD_ID).ifPresent(container ->
                 container.registerConfig(ModConfig.Type.COMMON, AE2VMConfig.COMMON_SPEC));
         modEventBus.addListener(this::commonSetup);
+        modEventBus.addListener(com.ae2vm.addon.route.RouteNetwork::register);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent e) ->
+                        com.ae2vm.addon.route.RouteSessions.remove(e.getEntity().getUUID()));
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.event.server.ServerStoppedEvent e) ->
+                        com.ae2vm.addon.route.RouteSessions.clear());
         
         checkBlockedMods(); // crash（或 warn）if a blocked author mod is loaded
         

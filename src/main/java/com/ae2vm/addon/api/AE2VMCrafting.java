@@ -173,6 +173,27 @@ public final class AE2VMCrafting {
         }
 
         // (v1.13.6) Record the request in the grid's hot-output LRU so a future pattern
+        var manualPolicy = com.ae2vm.addon.route.RouteSessions.get(grid, requester);
+        if (!manualPolicy.rules().isEmpty()) {
+            try {
+                var registries = requester.getActionSource().player().orElseThrow().registryAccess();
+                var candidates = com.ae2vm.addon.vm.ManualRoutePlanner.capture(what, manualPolicy,
+                        service::getCraftingFor, p -> com.ae2vm.addon.route.RouteIdentity.pattern(p, registries));
+                var stock = grid.getStorageService().getInventory().getAvailableStacks();
+                var state = new ChildCraftingSimulationState(new com.ae2vm.addon.vm.RealtimeNetworkCraftingSimulationState(grid.getStorageService()));
+                state.ignore(what);
+                return CompletableFuture.supplyAsync(() -> {
+                    try { return com.ae2vm.addon.vm.ManualRoutePlanner.plan(what, amount, candidates, stock::get, state); }
+                    catch (com.ae2vm.addon.route.RoutePlanningException e) { throw e; }
+                    catch (Exception e) { throw new com.ae2vm.addon.route.RoutePlanningException("手动路线计算失败：" + e.getClass().getSimpleName()); }
+                }, VM_EXECUTOR);
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e instanceof com.ae2vm.addon.route.RoutePlanningException ? e
+                        : new com.ae2vm.addon.route.RoutePlanningException("读取手动路线失败：" + e.getClass().getSimpleName()));
+            }
+        }
+
+        // Automatic requests retain their existing cache behavior.
         // change can background-precompute this output's plan ("first-round hit").
         recordRequest(grid, what, amount);
 
@@ -209,6 +230,7 @@ public final class AE2VMCrafting {
                 new CraftingVM(g, key -> resolve(g, (CraftingService) g.getCraftingService(),
                         new java.util.concurrent.ConcurrentHashMap<>(), key)));
         vm.setPatternResolver(key -> resolve(grid, service, vm.getResolverCache(), key));
+        vm.setAlternativePatternsResolver(key -> new java.util.ArrayList<>(service.getCraftingFor(key)));
 
         // Create simulation inventory.
         // IMPORTANT: always snapshot the LIVE network inventory (getAvailableStacks),
@@ -297,7 +319,8 @@ public final class AE2VMCrafting {
                     // REQUESTED key itself is in the missing set — the common NAST
                     // missing-heavy case (creative/omni mega-chains) has what NOT missing,
                     // so the walk (measured 5-10ms on this pack) was pure waste.
-                    if (rawPlan.simulation() && !rawPlan.missingItems().isEmpty()) {
+                    if (rawPlan.simulation() && !rawPlan.missingItems().isEmpty()
+                            && com.ae2vm.addon.vm.NetProduction.sufficient(rawPlan)) {
                         long missingCount = rawPlan.missingItems().get(what);
                         if (missingCount > 0) {
                         var realStock = storage.getInventory().getAvailableStacks();

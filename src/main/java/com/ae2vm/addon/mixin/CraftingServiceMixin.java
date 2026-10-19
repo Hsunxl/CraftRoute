@@ -84,11 +84,31 @@ public abstract class CraftingServiceMixin {
         
         // 配置开关：proxy.enabled=false 时完全禁用 VM 代理，交给原生 AE2 递归计算
         if (!com.ae2vm.addon.config.AE2VMConfig.isProxyEnabled()) {
+            if (!com.ae2vm.addon.route.RouteSessions.get(grid, simRequester).rules().isEmpty()) {
+                cir.setReturnValue(java.util.concurrent.CompletableFuture.failedFuture(
+                        new com.ae2vm.addon.route.RoutePlanningException("AE2-VM 已关闭；请清除手动约束或重新开启，未绕过约束")));
+            }
             return;
         }
         
         // Native fallback in progress (VM failed) → let the original method run untouched.
         if (VM_FALLBACK.get()) {
+            return;
+        }
+
+        // Manual requests have an isolated failure path: NEVER fall back to unrestricted AE2.
+        if (!com.ae2vm.addon.route.RouteSessions.get(grid, simRequester).rules().isEmpty()) {
+            var future = com.ae2vm.addon.api.AE2VMCrafting.calculate(grid, simRequester, what, amount, strategy);
+            future.whenComplete((plan, error) -> {
+                if (error != null) simRequester.getActionSource().player().ifPresent(player -> {
+                    Throwable cause = error;
+                    while (cause.getCause() != null) cause = cause.getCause();
+                    String message = "[AE2 路线] " + cause.getMessage();
+                    if (player instanceof net.minecraft.server.level.ServerPlayer sp)
+                        sp.server.execute(() -> sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(message)));
+                });
+            });
+            cir.setReturnValue(future);
             return;
         }
         

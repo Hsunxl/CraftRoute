@@ -6,9 +6,18 @@
     "mixins": [
         "CraftingServiceMixin",
         "PatternProviderLogicMixin",
-        "CraftingSimulationStateAccessor"
+        "CraftingSimulationStateAccessor",
+        "GrowthJobAccessor",
+        "GrowthTaskAccessor",
+        "GrowthCpuMixin",
+        "GrowthTimeAccessor",
+        "RouteMenuAccessor",
+        "CraftConfirmRouteAccessor"
     ],
-    "client": [],
+    "client": [
+        "RouteTreeWidgetMixin",
+        "RouteToolbarAccessor"
+    ],
     "server": [],
     "injectors": {
         "defaultRequire": 1
