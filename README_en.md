@@ -1,5 +1,8 @@
 # CraftRoute
 
+> **Repository moved**: [Hsunxl/CraftRoute](https://github.com/Hsunxl/CraftRoute) is now the main repository for this 1.21.1 line.
+> This repository keeps the commit history and the other MC version branches (1.7.10 to 26.2.1) for reference.
+
 AE2's automatic crafting calculation gets it wrong sometimes. This mod does two things about it:
 
 1. It replaces AE2's recursive calculation with a sequential stack VM: faster, deep chains actually finish, and the missing-ingredient list is more trustworthy.
