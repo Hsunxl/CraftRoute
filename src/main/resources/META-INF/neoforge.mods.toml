@@ -1,0 +1,72 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="LGPL-3.0"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+logoFile="craftroute.png"
+authors="Tao"
+description='''
+Replaces AE2's recursive crafting calculation with a sequential stack machine, and adds an
+interactive crafting-tree canvas.
+
+- Calculation: patterns are compiled to bytecode at encode time; requests execute sequentially
+  with subtree caching and BigInteger quantities. Same results as vanilla, without the recursion.
+- Canvas: press F8 in an AE2 terminal to draw the crafting tree, pick the recipe for each node
+  yourself, and encode the result into patterns (pattern cache + upload to pattern providers).
+'''
+
+[[mixins]]
+config="${mod_id}.mixins.json"
+
+# Optional client recipe import uses the per-recipe button API present in the tested JEI build.
+[[dependencies.${mod_id}]]
+    modId="jei"
+    type="optional"
+    versionRange="[19.57.0,)"
+    ordering="AFTER"
+    side="CLIENT"
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="${neoforge_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="[${minecraft_version}]"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="ae2"
+    type="required"
+    versionRange="${ae2_version_range}"
+    ordering="AFTER"
+    side="BOTH"
+
+# Thunderbolt-Core（可选，第三方兼容）：装了闪电库时要求版本 >= 2.0.0-beta.1
+# （对应 ae2lt/Thunderbolt-Core 分支 main，对齐 1.21.1 NeoForge 的 API：
+#  com.moakiee.thunderbolt.api.crafting.{CraftingPlanningEngine,PlanningRequest,
+#  PlanningEngineSession,PlanningAttempt,PlanningAttemptContext,PlanningExitException,
+#  CraftingPlanningEngines,CraftingPlanningEngineDescriptor,PlanningChoice}）。
+# 引擎 ID "craftroute" 通过 CraftingPlanningEngines.register 注册为可选私有算法。
+[[dependencies.${mod_id}]]
+    modId="thunderbolt"
+    type="optional"
+    versionRange="[2.0.0-beta.1,)"
+    ordering="NONE"
+    side="BOTH"
+
+# Configured（可选）：装了可在游戏内 Mod Configuration 界面编辑 config/craftroute-common.toml；不装配置仍然生效
+[[dependencies.${mod_id}]]
+    modId="configured"
+    type="optional"
+    versionRange="[2,3)"
+    ordering="NONE"
+    side="BOTH"
