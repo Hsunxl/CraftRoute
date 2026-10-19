@@ -1,6 +1,6 @@
 # 第三方致谢与许可声明
 
-**Third-Party Attributions & License Notice — AE2 VM (`ae2vm`)**
+**Third-Party Attributions & License Notice — CraftRoute (`craftroute`)**
 
 > 本模组引用了大量他人作品：AE2 及其生态模组的 API、JEI 的配方绘制体系、多个整合包模组的兼容补丁，以及若干第三方配方数据。
 > 本文件逐条列出**引用了谁、怎么引用、对方是什么授权、有没有随包分发**。
@@ -15,7 +15,7 @@
 1. **不分发他人代码**：本仓库与本模组的 JAR 中**不包含**任何第三方模组的 class、jar、贴图、模型、语言文件或数据包。
    所有第三方依赖在 `build.gradle` 中声明为 `compileOnly`（或 `testRuntimeOnly`），由玩家在整合包 / `mods` 目录里自行安装。
 2. **只通过公开 API 与 Mixin 交互**：对第三方模组的运行时影响方式只有两种 —— 调用其**公开 API**，或通过 **Mixin 注入**其类（见第 3 节，逐类列出）。
-3. **权利优先**：若任何权利人认为本项目对其作品的使用方式不当，请在本仓库开 issue 说明，我们会在确认后**移除相关代码或数据**，不需要走法律流程。
+3. **可移除**：若权利人对本项目的使用方式有异议，请在本仓库开 issue 说明，我们会在确认后**移除相关代码或数据**。
 
 ---
 
@@ -27,13 +27,13 @@
 | **Just Enough Items** (`jei`)<br>https://github.com/mezz/JustEnoughItems | mezz | **MIT** | 画布右侧配方显示：`IRecipeLayoutDrawable` 原生绘制、`IGuiProperties`、ghost ingredient 拖拽、配方列表与 catalyst（机器图标） | 否（可选，仅客户端） |
 | **AE2 JEI Integration** (`ae2jeiintegration`) | Tamaized, mezz | **LGPL-3.0** | `IngredientConverters`：JEI ingredient ↔ `AEKey` 双向转换，使画布能识别物品 / 流体 / 化学品 | 否 |
 | **AE2:Crafting Tree** (`ae2ct`)<br>作者：Neuvillette | Neuvillette | **All Rights Reserved**（保留所有权利） | 读取其**已同步**的合成计划（最终产物 / 数量 / 配方数），用于「修改合成树」自动导入；另有 Mixin 折叠按钮兼容（第 3 节）。**未复制任何 AE2CT 代码或资源** | 否 |
-| **Thunderbolt Core** (`thunderbolt`) | MOAKIEE, CystrySU, gjmhmm8, _leng, TedXenon, MHanHanBing, QianChang | **LGPL-3.0** | 可选：通过 `CraftingPlanningEngines.register(...)` 把 AE2 VM 注册为可选合成规划引擎（引擎 ID `ae2vm`）；未安装则自动跳过 | 否 |
+| **Thunderbolt Core** (`thunderbolt`) | MOAKIEE, CystrySU, gjmhmm8, _leng, TedXenon, MHanHanBing, QianChang | **LGPL-3.0** | 可选：通过 `CraftingPlanningEngines.register(...)` 把 CraftRoute 注册为可选合成规划引擎（引擎 ID `craftroute`）；未安装则自动跳过 | 否 |
 | **MixinExtras** (`io.github.llamalad7:mixinextras-neoforge`)<br>https://github.com/LlamaLad7/MixinExtras | LlamaLad7 | **MIT** | `@WrapOperation` / `@Local` 等 Mixin 增强注解，用于精确包裹 AE2 方法调用 | 编译期依赖（通常由加载器提供，不重复打包） |
 | **NeoForge**<br>https://github.com/neoforged/NeoForge | NeoForged Team | **LGPL-2.1** | 模组加载器与事件总线（`ScreenEvent`、`RegisterKeyMappingsEvent`、网络注册） | 否 |
 | **Minecraft** | Mojang Studios / Microsoft | Minecraft EULA | 运行平台 | 否 |
 
 > **关于 AE2CT（All Rights Reserved）**：本项目对 AE2CT 的使用仅限「读取其已同步到客户端的数据」与「一个只调整按钮 Y 坐标的 GUI 兼容 Mixin」。
-> 由于该模组授权为保留所有权利，**若作者 Neuvillette 提出要求，我们会立即移除 `RouteTreeWidgetMixin` 与自动导入功能**，画布其余能力不受影响。
+> 由于该模组授权为保留所有权利，这段兼容（`RouteTreeWidgetMixin` 与自动导入）是独立实现，**可以在不改变画布其余功能的前提下移除**。
 
 ---
 
@@ -55,7 +55,7 @@
 | **ME 综合工作终端 / WCWT** (`wcwt`) | lhy | **MIT** | `RouteClient.separateTerminalButtons`：把「深色模式」按钮上移 22px，避开 JEI 书签按钮 |
 | **FTB Library** (`ftblibrary`) | FTB Team | All Rights Reserved | **不注入、不修改**；本项目刻意使用普通 `Screen` 而非 `AbstractContainerScreen`，以**规避** FTB 自动注入的按钮 |
 | **Dark Mode Everywhere** (`darkmodeeverywhere`) | Buuz135 | **MIT** | **不注入、不修改**；自绘 `AeButton` 只重写 `renderWidget`，避免被其染黑 |
-| **Configured** (`configured`) | 见其仓库 | 见其仓库 | 可选：游戏内编辑 `config/ae2vm-common.toml` |
+| **Configured** (`configured`) | 见其仓库 | 见其仓库 | 可选：游戏内编辑 `config/craftroute-common.toml` |
 
 ---
 
@@ -83,8 +83,8 @@
 | 文件 | 来源 | 说明 |
 |---|---|---|
 | `ae2lt-recipes/*.json`（10 个） | 参照 **AE2 Lightning Tech**（`ae2lt`，MOAKIEE 等，LGPL-3.0）的 `ae2lt:overload_processing` 配方格式 | 仅在 `neoforge:mod_loaded` 条件满足（装了 `ae2lt` 且装了 `advanced_ae`）时生效；用于整合包的样板 / 配方对齐 |
-| `src/main/resources/ae2vm/lang/en_us.json` | 本项目原创 | — |
-| `src/main/resources/assets/ae2/screens/ae2vm_route.json` | 本项目原创，使用 AE2 的 `BackgroundGenerator` 屏幕定义格式 | 调色板取自 AE2 终端（#CBCCD4 / #9A9FB4 / #696D88） |
+| `src/main/resources/craftroute/lang/en_us.json` | 本项目原创 | — |
+| `src/main/resources/assets/ae2/screens/craftroute_route.json` | 本项目原创，使用 AE2 的 `BackgroundGenerator` 屏幕定义格式 | 调色板取自 AE2 终端（#CBCCD4 / #9A9FB4 / #696D88） |
 
 ---
 
@@ -103,13 +103,13 @@
 
 Applied Energistics 2、AE2 是 **Team AppliedEnergistics** 的项目与商标；Just Enough Items、JEI 属于 **mezz**；其余模组名称与商标归各自作者所有。
 
-**AE2 VM 是一个独立的第三方附属模组，与上述任何项目均无隶属、赞助或背书关系。** 模组内出现的其他模组名称仅用于说明兼容性。
+**CraftRoute 是一个独立的第三方附属模组，与上述任何项目均无隶属、赞助或背书关系。** 模组内出现的其他模组名称仅用于说明兼容性。
 
 ---
 
 ## 7. English Summary
 
-**AE2 VM** is licensed under **LGPL-3.0** (see [LICENSE](LICENSE)). It **does not redistribute** any third-party mod code, assets, or data; every third-party dependency is declared compileOnly and must be installed by the player.
+**CraftRoute** is licensed under **LGPL-3.0** (see [LICENSE](LICENSE)). It **does not redistribute** any third-party mod code, assets, or data; every third-party dependency is declared compileOnly and must be installed by the player.
 
 | Component | Author(s) | License | How it is used | Bundled? |
 |---|---|---|---|---|
@@ -117,7 +117,7 @@ Applied Energistics 2、AE2 是 **Team AppliedEnergistics** 的项目与商标�
 | Just Enough Items | mezz | MIT | Native recipe layout rendering on the canvas | No |
 | AE2 JEI Integration | Tamaized, mezz | LGPL-3.0 | IngredientConverters (JEI ingredient <-> AEKey) | No |
 | AE2:Crafting Tree | Neuvillette | **All Rights Reserved** | Reads its already-synchronised crafting plan; one GUI-only compatibility Mixin. **No AE2CT code is copied.** Removed on request. | No |
-| Thunderbolt Core | MOAKIEE et al. | LGPL-3.0 | Optional: registers ae2vm as a planning engine through its public API | No |
+| Thunderbolt Core | MOAKIEE et al. | LGPL-3.0 | Optional: registers craftroute as a planning engine through its public API | No |
 | MixinExtras | LlamaLad7 | MIT | Mixin enhancement annotations | Compile-time only |
 | NeoForge | NeoForged Team | LGPL-2.1 | Mod loader / event bus | No |
 | Minecraft | Mojang | EULA | Platform | No |

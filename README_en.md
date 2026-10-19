@@ -1,4 +1,4 @@
-# AE2 VM
+# CraftRoute
 
 AE2's automatic crafting calculation gets it wrong sometimes. This mod does two things about it:
 
@@ -28,7 +28,7 @@ Active as soon as the mod is installed. AE2's crafting calculation is intercepte
 
 The only acceptance criterion is that **results match vanilla AE2**: the same plan when it is computable, the same missing list when it is not, otherwise the request falls back to the original algorithm.
 
-To disable it: `proxyEnabled = false` in `config/ae2vm-common.toml` (restart required; editable in-game with Configured).
+To disable it: `proxyEnabled = false` in `config/craftroute-common.toml` (restart required; editable in-game with Configured).
 
 Rough numbers: a ten-level chain costs tens of milliseconds cold; recomputing the same request costs 100-200ns at the median (warm hit). These come from the benchmark suite in the repo, not from estimates.
 
@@ -70,7 +70,7 @@ Colours are sampled from the AE2 terminal (panel `#CBCCD4`, workspace `#9A9FB4`,
 1. Minecraft 1.21.1 + NeoForge 21.1.169+
 2. Applied Energistics 2 19.2.17+ (required)
 3. JEI 19.57+ (optional, needed for the recipe panel)
-4. Drop `ae2vm-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` into `mods/`, removing older versions first
+4. Drop `craftroute-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` into `mods/`, removing older versions first
 
 Client and server must run the same version: the packet channel is `route-2`.
 

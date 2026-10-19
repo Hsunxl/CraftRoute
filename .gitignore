@@ -58,9 +58,9 @@ backup-*/
 *.rej
 *-HANDOFF*.md
 *HANDOFF*.md
-AE2VM-*.md
+CraftRoute-*.md
 说明-*.md
-ae2vm-reference-bench-*.md
+craftroute-reference-bench-*.md
 *-build.log
 *-compile.log
 *-test.log

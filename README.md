@@ -1,4 +1,4 @@
-# AE2 VM
+# CraftRoute（合成路径）
 
 AE2 自动算合成路径的时候，偶尔会算错。这个模组就干两件事：
 
@@ -28,7 +28,7 @@ AE2 算一条合成路径，做法是把样板树递归展开一遍。链不深�
 
 判断标准只有一条：**结果要和原版对得上**。能算出来的必须一致，算不出来时报的缺失清单也要对得上，否则就退回原版算法。
 
-想关掉：`config/ae2vm-common.toml` 里 `proxyEnabled = false`。装了 Configured 可以在游戏内改（改完要重启）。
+想关掉：`config/craftroute-common.toml` 里 `proxyEnabled = false`。装了 Configured 可以在游戏内改（改完要重启）。
 
 性能参考：十条左右层深的深链，冷算一般在几十毫秒量级；同样的请求重复算（温热命中）在中位数 100–200ns。这些数字来自仓库里的基准测试，不是估算。
 
@@ -70,7 +70,7 @@ AE2 算一条合成路径，做法是把样板树递归展开一遍。链不深�
 1. Minecraft 1.21.1 + NeoForge 21.1.169+
 2. Applied Energistics 2 19.2.17+（必需）
 3. JEI 19.57+（可选，装了才有右边的配方面板）
-4. 把 `ae2vm-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` 放进 `mods/`，旧版本先删掉
+4. 把 `craftroute-nodetect-1.13.19-local.21-dev_neoforge_1.21.1.jar` 放进 `mods/`，旧版本先删掉
 
 客户端和服务端要用同一个版本，协议是 `route-2`，版本不一致连不上。
 
@@ -112,7 +112,7 @@ gradlew.bat -PmodsDir=<实例的 mods 目录> copyJarToMods
 
 **谁被引用了、什么授权、有没有打进包里，全部写在 [ATTRIBUTIONS.md](ATTRIBUTIONS.md)**，包括每一个 Mixin 注入的目标类。这里只说结论：仓库和 JAR 里不含任何第三方模组的代码或资源，所有依赖都是 `compileOnly`，由玩家自己装。
 
-其中 AE2:Crafting Tree（AE2CT）的授权是保留所有权利，本项目只是读它已经同步到客户端的数据，另加一个只改按钮位置的兼容 Mixin，没有复制它的代码。作者如果不同意，说一声就删。
+其中 AE2:Crafting Tree（AE2CT）的授权是保留所有权利，本项目只是读取它已经同步到客户端的数据，另加一个只改按钮位置的兼容 Mixin，没有复制它的代码。这段兼容是独立的一个类，可以单独拿掉，不影响画布其余功能。
 
 ## 许可
 

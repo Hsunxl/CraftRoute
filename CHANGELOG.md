@@ -18,12 +18,12 @@
     CPU 收下任务却**永远没有 provider 认领** → 进度 0 卡死。
     **取消重下就好**：刷新落地后版本被 bump、重新捕获绑定当前实例。
   - **修复**（本版有 **3 处**返回点，全部加了守卫）：
-    - `AE2VMCrafting.rebindStalePatterns(liveLookup, plan)`（新增）：投递前把每个
+    - `CraftRouteCrafting.rebindStalePatterns(liveLookup, plan)`（新增）：投递前把每个
       已派发样板重新绑定到网络当前实例。无等价 live 实例则判不可投递。
       `getCraftingFor` 为空视为 provider 刷新窗口，原样返回不误判。
-    - `AE2VMCrafting.patternContentEquals(a, b)`（新增）：内容级比较，识别
+    - `CraftRouteCrafting.patternContentEquals(a, b)`（新增）：内容级比较，识别
       「实例已换但内容相同」的重编码样板。
-    - `AE2VMCrafting.shouldLogUndeliverable(AEKey)`（新增）：`UNDELIVERABLE PLAN`
+    - `CraftRouteCrafting.shouldLogUndeliverable(AEKey)`（新增）：`UNDELIVERABLE PLAN`
       告警按 output key 节流（30 s 一条），避免 mega chain 刷屏。
     - **server-thread warm 快路径**（`supplyAsync` 之前）：rebind 后仍不可投递则
       **清空缓存并 fall through 到冷路径**，而不是返回死计划。
@@ -62,7 +62,7 @@
 将 VM-GTL（1.20.1 Forge，v1.12.x–v1.15.x）的图论处理移植到 1.21.1 计算逻辑，
 计算语义对齐 VM-GTL：
 
-- **环感知样板选择（AE2VMCrafting，对标 VM-GTL v1.12.x CYCLE-AWARE）**：
+- **环感知样板选择（CraftRouteCrafting，对标 VM-GTL v1.12.x CYCLE-AWARE）**：
   - `wouldCauseCycle`（2 重载，含 stock-aware 变体）：候选样板的输入若会闭合
     **死环**（配方定义图 SCC：无库存种子 + 无外部供应者），如 steel_ingot↔steel_dust，
     在 resolve() Try-1 阶段即被剪除；全部候选均环倾向时回退原集合（运行时 circularCache
@@ -95,7 +95,7 @@
   （1e9 种子环温热中位数 < 10μs）。
 ## [1.13.4] - 2026-08-20（1.21.1 温热命中 <100μs：负解析缓存 + 库存快照复用 + 服务端线程温热检查）
 
-- **游戏内实测（1.13.3）**：新增 [AE2-VM] WARM 诊断行后确认瓶颈三处：
+- **游戏内实测（1.13.3）**：新增 [CraftRoute] WARM 诊断行后确认瓶颈三处：
   - `tryCachedPlan` 109-624μs：used 守卫对纯叶子键反复全量 resolve()（null 从不入缓存）；
   - `cachedInv` 53-175μs：该网络无 storage watcher，AE2 每 tick 置脏，getCachedInventory()
     每次触发整库重建；
@@ -116,7 +116,7 @@
   即为快路径命中），首算的 60ms sleep 已消除；creative 温热 823-1117μs。目标 <100μs。
 - `CraftingVM.tryFastPath` / `tryCachedPlan` 新增**直接库存读取器（Function<AEKey,Long>）变体**：
   温热守卫改为 O(1) `KeyCounter.get()`，不再构造/拷贝整份库存、不再走模拟状态 extract 机制。
-- `AE2VMCrafting` 温热短路同步改为：`storage.getCachedInventory()` 捕获一次 +
+- `CraftRouteCrafting` 温热短路同步改为：`storage.getCachedInventory()` 捕获一次 +
   `tryCachedPlan(bc, key -> cached.get(key))`。库存只在缓存过期（跨 tick 变更）时才会触发一次重建
   ——与实时快照同代价，且只在变更 tick 发生。
 - 语义不变：命中仍逐项复核（模式版本 / DAG 身份 / 已用叶子足量 / 缺料键仍缺料），陈旧结果不可能被服务。
@@ -124,7 +124,7 @@
   getSortedPatterns() 每次调用都重新 sort+distinct+toList 分配）"变为纯 ConcurrentHashMap 命中
   （~0.1μs/节点）。缓存与 bundleCache 同生命周期：patternVersion 变化或 clearBundleCache() 时一并清空，
   不会比计划依赖的模式集活得更久。60 节点链温热走查预计省 100-200μs。
-- **温热诊断计时**：温热命中新增一行 [AE2-VM] WARM #N: worker=…μs (compile=…, cachedInv=…,
+- **温热诊断计时**：温热命中新增一行 [CraftRoute] WARM #N: worker=…μs (compile=…, cachedInv=…,
   tryCachedPlan=…)，用于对照 mixin 的 VM OK 总耗时（差值 = 服务端预处理 + ForkJoinPool 调度等待）。
 
 ## [1.13.0] - 2026-08-20（1.21.1 游戏内性能：缺料计划温热复用 <100μs）
@@ -135,7 +135,7 @@
 - `CraftingVM` 快路径 v4：缺料计划也缓存；命中时逐项复核（模式版本未变 / DAG 身份一致 /
   已用叶子仍足量 / 每个缺料键仍无样板且库存仍不足）后才返回，杜绝陈旧缺料被复用；重建计划
   时 simulation 标志按真实 missing 设置。
-- `AE2VMCrafting` API 层温热短路：用 `IStorageService.getCachedInventory()`（最多一 tick 旧、
+- `CraftRouteCrafting` API 层温热短路：用 `IStorageService.getCachedInventory()`（最多一 tick 旧、
   新鲜时 O(1)）惰性模拟状态先行尝试 `tryCachedPlan`，命中即返回——跳过实时库存快照、重试
   循环与 60ms 等待；未命中零额外开销（惰性物化）。
 - **60ms 等待窗口按缺失量分级**：缺料总量 > 1M 单位视为真实缺料（GTL 同步不可能凭空补
@@ -265,7 +265,7 @@
   - **效果**：`cycle/conversion-ring` 全 3 例 SUPPORTED（MISSING 恰缺 {C=1}、MINIMUM/UNBOUNDED 可行）。
 - **可复用库存**（`fuzzy/variant-route/minimum` + `unbounded`）：宿主私有可复用库存路由
   （`returnedFrom`，logical_tool 槽接受 damaged_tool）此前 VM 看不到 → 报缺 logical_tool。
-  - **修复**：`Ae2VmReferencePlanner` 把 `returnedFrom` 映射为带路由变体的 returned 种子并喂入
+  - **修复**：`CraftRouteReferencePlanner` 把 `returnedFrom` 映射为带路由变体的 returned 种子并喂入
     宿主可复用库存；`CraftingVM.applyBundleDirect` 种子抽取按 `fuzzyFamilyOf` 匹配变体。
   - **效果**：`fuzzy/variant-route` 全 3 例 SUPPORTED。
 - **验证**：闪电基准 38 SUPPORTED / 1 FALSE_POSITIVE（39 例，唯一剩余为 multi-dag/fibonacci/minimum
@@ -293,7 +293,7 @@
      `stockFromNetwork[v]=整槽需求`（变体是一次性池，清零父 bundle 的 used[v]），只合成缺口。
 - **效果**：`craftable-primary-white-stock amt=100 (white=1)` → 修复前 `missing={white_wool=99}`，
   修复后 `missing={}`（used={black=99, white=1}）。
-- **测试**：新增边界基准套件 `Ae2VmBoundaryCapabilitySuiteTest`（FakeBenchGrid 激活 realStockOf，
+- **测试**：新增边界基准套件 `CraftRouteBoundaryCapabilitySuiteTest`（FakeBenchGrid 激活 realStockOf，
   37 例：craftable-primary-white-stock/white-stock10/partial-gray/no-variant、fuzzy-leaf-white-stock、
   deep-chain-mid-stock-l10/l20×s0/s1/s5、craftable-fluid-partial、infeasible-no-variant-stock）。
 - **验证**：完整测试 BUILD SUCCESSFUL（108 用例 0 失败）；参考基准 33 例 supported=23/falsePositive=10
@@ -361,10 +361,10 @@
 ## [1.9.2] - 2026-08-07
 
 ### 优化
-- **跨请求 JIT 缓存复用**：此前每次合成请求都新建 `CraftingVM`，导致每个子样板每次都重新捕获（JIT 命中率 0–49%）。现在 `AE2VMCrafting` 按网络（grid）缓存并复用 VM 实例，`bundleCache`（每个样板 1-craft 子树效果）跨请求存活，第二次起的请求命中率接近 100%。
+- **跨请求 JIT 缓存复用**：此前每次合成请求都新建 `CraftingVM`，导致每个子样板每次都重新捕获（JIT 命中率 0–49%）。现在 `CraftRouteCrafting` 按网络（grid）缓存并复用 VM 实例，`bundleCache`（每个样板 1-craft 子树效果）跨请求存活，第二次起的请求命中率接近 100%。
   - `CraftingVM`：`patternResolver` 改为可更新（`setPatternResolver`，换 per-request resolver 缓存）；`execute()` 加 `synchronized`（复用并发安全）；`execute` 开头做「缓存卫生」——丢弃记录了缺料（missing 非空）的 bundle，避免缺料快照跨请求污染；干净 bundle（纯结构）安全复用。
   - 正确性已验证：复用后库存减少时仍正确报缺失（deficit-aware）。
-- **日志**：保留性能计算日志（`[AE2-VM] calc time: X ms`），移除调试期的 JIT 命中率日志。
+- **日志**：保留性能计算日志（`[CraftRoute] calc time: X ms`），移除调试期的 JIT 命中率日志。
 
 ## [1.9.0] - 2026-08-07
 
@@ -393,11 +393,11 @@
 
 ### 新增
 - **双版本构建**：每次编译同时产出两个 jar
-  - `ae2vm-<ver>.jar` —— 针对检测版：检测到不兼容作者的 mod（data_energistics / mekenergistics / soulplied_energistics）时游戏**闪退**
-  - `ae2vm-nodetect-<ver>.jar` —— 无针对检测版：检测到只警告，**不闪退**
+  - `craftroute-<ver>.jar` —— 针对检测版：检测到不兼容作者的 mod（data_energistics / mekenergistics / soulplied_energistics）时游戏**闪退**
+  - `craftroute-nodetect-<ver>.jar` —— 无针对检测版：检测到只警告，**不闪退**
   - 构建脚本：`buildBoth.bat`（版本 +0.0.1 → 构建 crash 版 → 构建 warn 版 → 两个 jar 都复制到 mods）
-  - ⚠️ 两个 jar 共用 `modId=ae2vm`，启动游戏前**只保留其中一个**，否则 duplicate modId 报错
-- **blockedmod 检测双模式**：运行模式（crash / warn）由 jar 内 `ae2vm/blockedmode.txt` 决定，`-PblockedMode=...` 控制
+  - ⚠️ 两个 jar 共用 `modId=craftroute`，启动游戏前**只保留其中一个**，否则 duplicate modId 报错
+- **blockedmod 检测双模式**：运行模式（crash / warn）由 jar 内 `craftroute/blockedmode.txt` 决定，`-PblockedMode=...` 控制
 - **版本号基于 1.8.1**：每次编译 `mod_version` +0.0.1
 
 ### 已知限制

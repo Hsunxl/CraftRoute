@@ -4,14 +4,17 @@ plugins {
 }
 
 group = mod_group_id
-// jar 版本带 loader+MC 后缀：ae2vm-<ver>_neoforge_1.21.1.jar / ae2vm-nodetect-<ver>_neoforge_1.21.1.jar
-// （与 Forge 1.20.1 兄弟项目 ae2vm-<ver>_forge_1.20.1.jar 命名风格一致）
+// jar 版本带 loader+MC 后缀：craftroute-<ver>_neoforge_1.21.1.jar / craftroute-nodetect-<ver>_neoforge_1.21.1.jar
+// （与 Forge 1.20.1 兄弟项目 craftroute-<ver>_forge_1.20.1.jar 命名风格一致）
 version = "${mod_version}_neoforge_${minecraft_version}"
 
 // blockedMode: 'crash'(默认) → 检测到该作者 mod 游戏闪退；'warn' → 只警告不闪退
-// 每次编译出两个版本：ae2vm-<ver>.jar（crash / 针对检测）+ ae2vm-nodetect-<ver>.jar（warn / 无针对检测）
+// 每次编译出两个版本：craftroute-<ver>.jar（crash / 针对检测）+ craftroute-nodetect-<ver>.jar（warn / 无针对检测）
 def blockedMode = providers.gradleProperty('blockedMode').getOrElse('crash')
-def modArchiveName = blockedMode == 'warn' ? 'ae2vm-nodetect' : mod_id
+
+// 整合包实例的 mods 目录：默认 <项目>/../../../mods，可用 -PmodsDir=<绝对路径> 覆盖（CI / 另放的构建目录）。
+def instanceMods = providers.gradleProperty('modsDir').getOrElse('../../../mods')
+def modArchiveName = blockedMode == 'warn' ? 'craftroute-nodetect' : mod_id
 
 base {
     archivesName = modArchiveName
@@ -28,7 +31,7 @@ neoForge {
     version = neoforge_version
 
     mods {
-        ae2vm {
+        craftroute {
             sourceSet sourceSets.main
         }
     }
@@ -48,18 +51,17 @@ neoForge {
 }
 
 dependencies {
-    compileOnly files('../../../mods/ae2jeiintegration-1.2.1.jar')
+    compileOnly files("${instanceMods}/ae2jeiintegration-1.2.1.jar")
     // Optional client integrations; supplied by the installed ATM10 instance.
-    compileOnly files(providers.gradleProperty('jeiJar').getOrElse('../../../mods/jei-1.21.1-neoforge-19.57.0.446.jar'))
-    compileOnly files(providers.gradleProperty('ae2ctJar').getOrElse('../../../mods/ae2ct-1.21.1-1.1.1.jar'))
-    testRuntimeOnly files(providers.gradleProperty('jeiJar').getOrElse('../../../mods/jei-1.21.1-neoforge-19.57.0.446.jar'))
-    testRuntimeOnly files(providers.gradleProperty('ae2ctJar').getOrElse('../../../mods/ae2ct-1.21.1-1.1.1.jar'))
+    compileOnly files(providers.gradleProperty('jeiJar').getOrElse("${instanceMods}/jei-1.21.1-neoforge-19.57.0.446.jar"))
+    compileOnly files(providers.gradleProperty('ae2ctJar').getOrElse("${instanceMods}/ae2ct-1.21.1-1.1.1.jar"))
+    testRuntimeOnly files(providers.gradleProperty('jeiJar').getOrElse("${instanceMods}/jei-1.21.1-neoforge-19.57.0.446.jar"))
+    testRuntimeOnly files(providers.gradleProperty('ae2ctJar').getOrElse("${instanceMods}/ae2ct-1.21.1-1.1.1.jar"))
     implementation "org.appliedenergistics:appliedenergistics2:${ae2_version}"
     compileOnly "io.github.llamalad7:mixinextras-neoforge:0.5.3"
-    // Thunderbolt-Core：可选前置，compileOnly。未安装也能正常运行；装了之后
-    // 只有玩家用 /thunderbolt engine ae2vm 选中本引擎，合成计算才会路由到 VM。
-    // 路径默认取整合包 mods 目录，可用 -PthunderboltJar=<jar> 覆盖（CI / 开发机）。
-    compileOnly files(providers.gradleProperty('thunderboltJar').getOrElse('../../../mods/thunderbolt-2.0.1.jar'))
+    // Thunderbolt-Core：可选前置，compileOnly。未安装也能正常运行；装了之后只有玩家
+    // 用 /thunderbolt engine craftroute 选中本引擎，合成计算才会路由过来。
+    compileOnly files(providers.gradleProperty('thunderboltJar').getOrElse("${instanceMods}/thunderbolt-2.0.1.jar"))
 
     testImplementation 'org.spongepowered:mixin:0.8.5'
     testImplementation platform('org.junit:junit-bom:5.10.2')
@@ -83,7 +85,7 @@ tasks.withType(JavaCompile).configureEach {
 
 tasks.named('test', Test) {
     useJUnitPlatform()
-    // 打印 [reference-capability] 结果行到控制台（AE2VM 参考能力速度基准）
+    // 打印 [reference-capability] 结果行到控制台（参考能力速度基准）
     testLogging {
         showStandardStreams = true
     }
@@ -98,6 +100,8 @@ tasks.register('routeFunctionalTest', Test) {
     useJUnitPlatform()
     jvmArgs '-Xverify:all'
     exclude '**/PerformanceBenchmark.class'
+    // 已安装 jar 的契约测试要读整合包的 mods 目录（-PmodsDir 可覆盖）。
+    systemProperty 'craftroute.modsDir', instanceMods
 }
 
 tasks.named('processResources', ProcessResources) {
@@ -117,15 +121,15 @@ tasks.named('processResources', ProcessResources) {
         expand replaceProperties
     }
 
-    // 把 blockedMode(crash/warn) 展开进 ae2vm/blockedmode.txt，打包进 jar，运行时可读
-    filesMatching('ae2vm/blockedmode.txt') {
+    // 把 blockedMode(crash/warn) 展开进 craftroute/blockedmode.txt，打包进 jar，运行时可读
+    filesMatching('craftroute/blockedmode.txt') {
         expand([blockedMode: blockedMode])
     }
 }
 
 tasks.named('compileJava', JavaCompile) {
     options.compilerArgs += [
-        '-Amixin.refmap=ae2vm.refmap.json'
+        '-Amixin.refmap=craftroute.refmap.json'
     ]
 }
 
@@ -133,13 +137,10 @@ tasks.named('compileJava', JavaCompile) {
 // Remove all old versions of this mod before copying the new one
 // 只删当前变体的旧 jar，保留另一个变体（crash 变体不会误删 nodetect 变体）
 // 属性在 doLast 外捕获成局部变量（doLast 里拿不到配置期的 mod_version/modArchiveName 值）
-// 目标目录：默认 <项目>/../../../mods（整合包实例的 mods），可用 -PmodsDir=<绝对路径> 覆盖。
-def modsDirPath = providers.gradleProperty('modsDir').getOrElse('../../../mods')
-
 tasks.register('cleanOldJars') {
-    def modsDir = java.nio.file.Path.of(modsDirPath.get().toString())
-    // crash 变体(ae2vm) → ae2vm-<数字>.jar；warn 变体(ae2vm-nodetect) → ae2vm-nodetect-*.jar
-    def glob = modArchiveName == 'ae2vm' ? 'ae2vm-[0-9]*.jar' : "${modArchiveName}-*.jar"
+    def modsDir = java.nio.file.Path.of(instanceMods)
+    // crash 变体(craftroute) → craftroute-<数字>.jar；warn 变体(craftroute-nodetect) → craftroute-nodetect-*.jar
+    def glob = modArchiveName == 'craftroute' ? 'craftroute-[0-9]*.jar' : "${modArchiveName}-*.jar"
     doLast {
         java.nio.file.Files.newDirectoryStream(modsDir, glob).withCloseable { stream ->
             stream.each { java.nio.file.Files.deleteIfExists(it) }
@@ -151,7 +152,7 @@ tasks.register('copyJarToMods', Copy) {
     dependsOn tasks.named('jar')
     dependsOn 'cleanOldJars'
     from tasks.named('jar').flatMap { it.archiveFile }
-    into modsDirPath.get()
+    into instanceMods
     doLast {
         logger.lifecycle("Copied JAR to mods folder")
     }
